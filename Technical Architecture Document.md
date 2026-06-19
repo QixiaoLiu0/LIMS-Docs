@@ -17,8 +17,8 @@ The system adopts a strict decoupled frontend-backend architecture. Component re
   - **Strict Rule:** The frontend must never construct SQL or contain core business logic. All data must be fetched via HTTP APIs.
 - **Backend Layer (Java Servlet API):**
   - **Sole Responsibility:** Acts as a stateless API gateway and business logic executor. It receives requests, validates permissions, enforces business rules, and coordinates database interactions.
-  - **Rationale:** We intentionally choose pure JDBC with connection pooling over heavy ORMs (such as Hibernate or MyBatis). For a team in the early stages of their career, bypassing high-level abstractions encourages a "write from scratch" mentality. This sharpens core database skills, provides absolute control over SQL execution, and ensures complete performance transparency.
-  - **Strict Rule:** The backend must never generate HTML/UI code. It must return 100% JSON data.
+  - **Architectural Decision (Zero Framework):** The backend is built **strictly without the Spring ecosystem** (No Spring Boot, or Spring Data/Hibernate).
+  - **Rationale:** To facilitate deep foundational learning for junior developers, avoiding heavy enterprise frameworks prevents reliance on black-box annotations (e.g., `@Transactional`, `@RestController`). Using pure **Servlets** and **JDBC** forces the team to thoroughly understand the raw HTTP request lifecycle, manual database connection pooling, and explicit transaction boundaries.
 - **Persistence Layer (MySQL):**
   - **Sole Responsibility:** Ensures data persistence and relational integrity (e.g., foreign key constraints).
   - **Strict Rule:** The database acts as storage. Complex state logic (e.g., "Status A cannot change to Status B") must be handled in Java. The use of complex **triggers** or **stored procedures** is prohibited.
