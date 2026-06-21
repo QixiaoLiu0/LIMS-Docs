@@ -12,6 +12,7 @@ The system adopts a strict decoupled frontend-backend architecture. Component re
   - **Frontend:** Next.js (React), Tailwind CSS, MUI
   - **Backend:** Java 8, Tomcat 9.0.x, Pure JDBC (No ORM)
   - **Database:** MySQL 8.0.x
+  - **Package Manager:** Maven 3.9.x
 - **Frontend Layer (Next.js / React):**
   - **Sole Responsibility:** UI rendering, routing, user input validation, and state management.
   - **Strict Rule:** The frontend must never construct SQL or contain core business logic. All data must be fetched via HTTP APIs.
