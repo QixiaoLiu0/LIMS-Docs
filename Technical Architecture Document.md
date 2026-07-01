@@ -12,14 +12,18 @@ The system adopts a strict decoupled frontend-backend architecture. Component re
   - **Frontend:** Next.js (React), Tailwind CSS, MUI
   - **Backend:** Java 8, Tomcat 9.0.x, Pure JDBC (No ORM)
   - **Database:** MySQL 8.0.x
+  - **Connection Pool:** HikariCP 4.0.x (Selected for Java 8 compatibility)
   - **Package Manager:** Maven 3.9.x
+
 - **Frontend Layer (Next.js / React):**
   - **Sole Responsibility:** UI rendering, routing, user input validation, and state management.
   - **Strict Rule:** The frontend must never construct SQL or contain core business logic. All data must be fetched via HTTP APIs.
+
 - **Backend Layer (Java Servlet API):**
   - **Sole Responsibility:** Acts as a stateless API gateway and business logic executor. It receives requests, validates permissions, enforces business rules, and coordinates database interactions.
   - **Architectural Decision (Zero Framework):** The backend is built **strictly without the Spring ecosystem** (No Spring Boot, or Spring Data/Hibernate).
   - **Rationale:** To facilitate deep foundational learning for junior developers, avoiding heavy enterprise frameworks prevents reliance on black-box annotations (e.g., `@Transactional`, `@RestController`). Using pure **Servlets** and **JDBC** forces the team to thoroughly understand the raw HTTP request lifecycle, manual database connection pooling, and explicit transaction boundaries.
+
 - **Persistence Layer (MySQL):**
   - **Sole Responsibility:** Ensures data persistence and relational integrity (e.g., foreign key constraints).
   - **Strict Rule:** The database acts as storage. Complex state logic (e.g., "Status A cannot change to Status B") must be handled in Java. The use of complex **triggers** or **stored procedures** is prohibited.
@@ -74,9 +78,13 @@ To eliminate frontend-backend integration friction, CORS, exceptions, and API re
 
 In a pure JDBC environment, to prevent data inconsistency during multi-table operations, the Service layer must govern all transactions. To keep DAO method signatures clean and decoupled, we utilize the **ThreadLocal pattern** to bind the active database connection to the current HTTP request thread.
 
-- **Connection Binding:** The Service layer initiates a database operation by calling `DBUtil.getConnection()`. `DBUtil` checks if the current thread already holds a connection in its `ThreadLocal` variable. If not, it fetches one from the connection pool, binds it to the thread, and returns it.
+- **HikariCP Pool Initialization:** \* The `HikariDataSource` must be initialized as a singleton during application startup (e.g., via a `ServletContextListener`).
+  - Key pool configurations (e.g., `maximumPoolSize`, `minimumIdle`, `idleTimeout`, and `connectionTimeout`) must be externalized in a `db.properties` file.
+- **Connection Binding & Pooling Behavior:** \* The Service layer initiates a database operation by calling `DBUtil.getConnection()`.
+  - `DBUtil` checks if the current thread already holds a connection in its `ThreadLocal` variable. If not, it borrows a connection **from the HikariCP pool** , binds it to the thread, and returns it.
 - **Transaction Boundary:** The Service method explicitly calls `conn.setAutoCommit(false)` to begin the transaction.
 - **Implicit Propagation:** DAO methods **do not** require a `Connection` parameter. Inside the DAO, calling `DBUtil.getConnection()` will automatically return the exact same connection bound by the Service layer, ensuring both operate within the same transaction scope.
-- **Commit, Rollback, and Strict Cleanup:** \* On success, the Service layer calls `conn.commit()`.
+- **Commit, Rollback, and Strict Cleanup:**
+  - On success, the Service layer calls `conn.commit()`.
   - On an exception, the Service layer calls `conn.rollback()` in the `catch` block.
-  - ⚠️ **CRITICAL RULE (Memory Leak Prevention):** Whether successful or not, the Service layer MUST use a `finally` block to call `DBUtil.closeConnection()`. This utility method must close the connection and **strictly execute `ThreadLocal.remove()`** . Failure to clear the thread context will pollute Tomcat's thread pool, causing catastrophic transaction leaks across different users.
+  - ⚠️ **CRITICAL RULE (Memory Leak Prevention):** Whether successful or not, the Service layer MUST use a `finally` block to call `DBUtil.closeConnection()`. This utility method must call `conn.close()` (which **returns the connection back to the HikariCP pool** rather than destroying it) and **strictly execute `ThreadLocal.remove()`** . Failure to clear the thread context will pollute Tomcat's thread pool, causing catastrophic transaction leaks and connection pool exhaustion.
