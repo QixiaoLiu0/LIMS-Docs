@@ -7,6 +7,7 @@ This document outlines the standard Git workflow for our LIMS project. All team 
 We use a simplified Gitflow approach.
 
 - **`main`** : The production-ready branch. **(NEVER PUSH DIRECTLY HERE!)**
+  - Note: If your local default branch is named `master`, please rename it to `main` using: `git branch -m master main`
 - **`develop`** : The active integration branch. All completed features are merged here for Sprint testing.
 - **Feature Branches** : Created for daily work.
 - **Naming Convention:** `feature/<Jira-Ticket>-<short-description>`
