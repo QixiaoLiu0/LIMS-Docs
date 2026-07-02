@@ -10,7 +10,7 @@ The system adopts a strict decoupled frontend-backend architecture. Component re
 
 - **Core Tech Stack:**
   - **Frontend:** Next.js (React), Tailwind CSS, MUI
-  - **Backend:** Java 8, Tomcat 9.0.x (Servlet 4.0), Pure JDBC (No ORM)
+  - **Backend:** Java 8, Tomcat 9.0.x (Servlet 4.0), Pure JDBC (No ORM), Gson 2.9.0
   - **Database:** MySQL 8.0.x
   - **Connection Pool:** HikariCP 4.0.x (Selected for Java 8 compatibility)
   - **Package Manager:** Maven 3.9.x
