@@ -2,8 +2,9 @@
 
 ## 📌 Global Conventions
 
+- **Architectural Note:**This system only supports**GET**and **POST **methods; **PUT **and **DELETE **are intentionally excluded.
 - **Base URL:** `/api` (e.g., `http://localhost:8080/lims/api`)
-- **Headers:** `Content-Type: application/json` is required for all `POST` and `PUT` requests.
+- **Headers:** `Content-Type: application/json` is required for all `POST` requests.
 - **Authentication (Sprint 1 Bypass):** No JWT validation for this sprint. For any database fields requiring user tracking (e.g., `created_by`, `updated_by`), the backend will **hardcode** the value as `"SYS_ADMIN_001"`.
 - **Global Response Wrapper:** All backend responses, regardless of success or failure, will be wrapped in the following standard `RespResult<T>` structure:
 
