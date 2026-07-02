@@ -2,7 +2,7 @@
 
 ## 📌 Global Conventions
 
-- **Architectural Note: This system only supports **GET** and **POST** methods; **PUT** and **DELETE** are intentionally excluded.
+- **Architectural Note: This system only supports **GET** and **POST** methods; **PUT** and **DELETE\*\* are intentionally excluded.
 - **Base URL:** `/api` (e.g., `http://localhost:8080/lims/api`)
 - **Headers:** `Content-Type: application/json` is required for all `POST` requests.
 - **Authentication (Sprint 1 Bypass):** No JWT validation for this sprint. For any database fields requiring user tracking (e.g., `created_by`, `updated_by`), the backend will **hardcode** the value as `"SYS_ADMIN_001"`.
@@ -55,7 +55,7 @@
   "responseCode": 200,
   "message": "Test Type created successfully",
   "data": {
-    "testTypeId": "TT-001"
+    "testTypeId": "1"
   }
 }
 ```
@@ -75,7 +75,7 @@
   "message": "Data retrieved successfully",
   "data": [
     {
-      "testTypeId": "TT-001",
+      "testTypeId": "1",
       "typeName": "ICP",
       "requiredVolume": 500.0,
       "description": "Inductively Coupled Plasma analysis for metal detection",
@@ -97,7 +97,7 @@
       ]
     },
     {
-      "testTypeId": "TT-002",
+      "testTypeId": "2",
       "typeName": "IC",
       "requiredVolume": 100.0,
       "description": "Ion Chromatography for anion analysis",
@@ -129,7 +129,7 @@
 - 1. **Data Freshness:** Ensures the user is editing the most up-to-date record, preventing data conflicts if another admin modified it recently.
 - 2. **Deep Linking / Page Refresh:** Allows the Edit page to be accessed directly via URL or refreshed without crashing, as it does not rely on the parent list component's memory state.
 - **Method:** `GET`
-- **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/TT-001`)_
+- **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/1`)_
 - **Request Body:** None
 - **Success Response (`HTTP 200 OK`):**
 
@@ -138,7 +138,7 @@
   "responseCode": 200,
   "message": "Data retrieved successfully",
   "data": {
-    "testTypeId": "TT-001",
+    "testTypeId": "1",
     "typeName": "ICP",
     "requiredVolume": 50.0,
     "description": "Inductively Coupled Plasma analysis for metal detection",
@@ -170,7 +170,7 @@
   2. `DELETE` all existing rows in the `Parameter` table where `test_type_id = {id}`.
   3. Loop through the incoming `parameters` JSON array and `INSERT` them as brand-new records.
 - **Method:** `POST`
-- **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/TT-001`)_
+- **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/1`)_
 - **Request Body (JSON):**
   ```
   {
