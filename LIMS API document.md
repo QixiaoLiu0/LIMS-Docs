@@ -184,6 +184,7 @@
 
   ```JSON
   {
+    "testTypeId": "1",
     "typeName": "ICP-Modified",
     "requiredVolume": 600.00,
     "description": "Updated description text...",
