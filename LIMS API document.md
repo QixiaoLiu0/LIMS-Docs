@@ -68,7 +68,7 @@
 - **Architect Note (For Backend):** ⚠️ **CRITICAL:** Do NOT use the N+1 query approach (executing a separate SQL query inside a `for` loop for each test type). You MUST execute a single `LEFT JOIN` SQL query to fetch data from both tables simultaneously. Then, in your Java Servlet/DAO, iterate through the flat JDBC `ResultSet` and group (fold) the duplicated `Test_Type` rows into a single `TestTypeDTO` that contains a `List<ParameterDTO>`.
 - **Method:** `GET`
 - **URL:** `/api/test-types`
-- **Request Body:** None
+- **Request Body:** Non
 - **Success Response (`HTTP 200 OK`):**
 
 ```json
@@ -173,14 +173,16 @@
 ### 4. Update Test Type
 
 - **Description:** Overwrites an existing test type and its parameter list.
-- **Architect Note (For Backend):** Use the **"Delete & Re-insert"** strategy inside a single JDBC transaction:
+- **gArchitect Note (For Backend):** Use the **"Delete & Re-insert"** strategy inside a single JDBC transaction:
   1. `UPDATE` the main `Test_Type` row using the `{id}` from the URL.
   2. `DELETE` all existing rows in the `Parameter` table where `test_type_id = {id}`.
   3. Loop through the incoming `parameters` JSON array and `INSERT` them as brand-new records.
+
 - **Method:** `POST`
 - **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/1`)_
 - **Request Body (JSON):**
-  ```
+
+  ```JSON
   {
     "typeName": "ICP-Modified",
     "requiredVolume": 600.00,
@@ -203,12 +205,13 @@
     ]
   }
   ```
+
 - **Success Response** (`HTTP 200 OK`):
 
 ```json
 {
   "responseCode": 200,
   "message": "Test Type updated successfully",
-  "data": null
+  "data": "true"
 }
 ```

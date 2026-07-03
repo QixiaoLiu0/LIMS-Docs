@@ -9,7 +9,7 @@
 The system adopts a strict decoupled frontend-backend architecture. Component responsibilities are clearly defined, and overstepping boundaries is strictly prohibited:
 
 - **Core Tech Stack:**
-  - **Frontend:** Next.js (React), Tailwind CSS, MUI
+  - **Frontend:** Next.js (Reagct), Tailwind CSS, MUI
   - **Backend:** Java 8, Tomcat 9.0.x (Servlet 4.0), Pure JDBC (No ORM), Gson 2.9.0
   - **Database:** MySQL 8.0.x
   - **Connection Pool:** HikariCP 4.0.x (Selected for Java 8 compatibility)
@@ -33,7 +33,7 @@ The system adopts a strict decoupled frontend-backend architecture. Component re
 Java backend code must strictly follow a unidirectional dependency chain: `Controller -> Service -> DAO`. **Bypassing layers is strictly prohibited** (e.g., a Servlet must never call a DAO directly).
 
 - **Controller (Servlet Layer):**
-  - **I/O:** Only responsible for parsing HTTP JSON requests into `ReqDTO`s and wrapping the output in a `RespResult<T>`.
+  - **I/O:** Only responsible for parsing HTTP JSON requests into `ReqDTO`s and wrapping the output in a `RespResult<T>`**(It is strictly forbidden for the Controller layer to return database entities)**.
   - **Restriction:** Absolutely no business logic (e.g., state-checking `if-else` statements) or JDBC code is allowed here.
 - **Service (Business Logic Layer):**
   - **Core:** The heart of the system. Converts `ReqDTO`s to `Entity` objects and executes all business validation rules.
