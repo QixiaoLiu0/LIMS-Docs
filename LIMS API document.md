@@ -38,11 +38,13 @@
   "parameters": [
     {
       "parameterName": "Li DM",
-      "unit": "mg/L"
+      "unit": "mg/L",
+      "limit": "<1.0"
     },
     {
       "parameterName": "Be DM",
-      "unit": "mg/L"
+      "unit": "mg/L",
+      "limit": "<2.0"
     }
   ]
 }
@@ -87,12 +89,14 @@
         {
           "parameterId": 101,
           "parameterName": "Li DM",
-          "unit": "mg/L"
+          "unit": "mg/L",
+          "limit": "<1.0"
         },
         {
           "parameterId": 102,
           "parameterName": "Be DM",
           "unit": "mg/L"
+          "limit": "<2.0"
         }
       ]
     },
@@ -110,11 +114,13 @@
           "parameterId": 201,
           "parameterName": "F",
           "unit": "ppm"
+          "limit": "<30"
         },
         {
           "parameterId": 202,
           "parameterName": "Cl",
-          "unit": "ppm"
+          "unit": "ppm",
+          "limit": "<50"
         }
       ]
     }
@@ -150,12 +156,14 @@
       {
         "parameterId": 101,
         "parameterName": "Li DM",
-        "unit": "mg/L"
+        "unit": "mg/L",
+        "limit": "<1.0"
       },
       {
         "parameterId": 102,
         "parameterName": "Be DM",
-        "unit": "mg/L"
+        "unit": "mg/L",
+        "limit": "<2.0"
       }
     ]
   }
@@ -184,11 +192,13 @@
     "parameters": [
       {
         "parameterName": "Li DM",
-        "unit": "ppm"
+        "unit": "ppm",
+        "limit": "<1.0"
       },
       {
         "parameterName": "New Element",
-        "unit": "mg/L"
+        "unit": "mg/L",
+        "limit": "<2.0"
       }
     ]
   }
