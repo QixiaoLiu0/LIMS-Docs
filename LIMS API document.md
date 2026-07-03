@@ -212,6 +212,6 @@
 {
   "responseCode": 200,
   "message": "Test Type updated successfully",
-  "data": "true"
+  "data": null
 }
 ```
