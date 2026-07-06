@@ -172,44 +172,49 @@
 
 ### 4. Update Test Type
 
-- **Description:** Overwrites an existing test type and its parameter list.
-- **gArchitect Note (For Backend):** Use the **"Delete & Re-insert"** strategy inside a single JDBC transaction:
-  1. `UPDATE` the main `Test_Type` row using the `{id}` from the URL.
-  2. `DELETE` all existing rows in the `Parameter` table where `test_type_id = {id}`.
-  3. Loop through the incoming `parameters` JSON array and `INSERT` them as brand-new records.
-
-- **Method:** `POST`
+- **Description:** Updates an existing test type and performs a precise, differential update (Diffing) on its parameter list to preserve historical data integrity (Foreign Key constraints).
+- **Architect Note (For Backend & Frontend):** \* **Frontend:** To update an existing parameter, you **MUST** include its original `parameterId`. To add a brand-new parameter, omit the `parameterId` (or pass `null`). If you remove a parameter from this array, the backend will treat it as a deletion request.
+  - **Backend:** Use the "Diffing Algorithm" inside a single JDBC transaction:
+    1. `UPDATE` the main `Test_Type` row using the `{id}` from the URL.
+    2. Loop through the incoming `parameters` JSON array.
+    3. If `parameterId` exists **$\rightarrow$** `UPDATE` existing parameter.
+    4. If `parameterId` is null/missing **$\rightarrow$** `INSERT` new parameter.
+    5. If an existing DB parameter is missing from the JSON **$\rightarrow$** `DELETE` it (catch FK exceptions gracefully).
+- **Method:** **POST**
 - **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/1`)_
 - **Request Body (JSON):**
 
-  ```JSON
-  {
-    "testTypeId": "1",
-    "typeName": "ICP-Modified",
-    "requiredVolume": 600.00,
-    "description": "Updated description text...",
-    "bgColor": "Red",
-    "iconColor": "Red",
-    "borderColor": "Red",
-    "isActive": 1,
-    "parameters": [
-      {
-        "parameterName": "Li DM",
-        "unit": "ppm",
-        "limit": "<1.0"
-      },
-      {
-        "parameterName": "New Element",
-        "unit": "mg/L",
-        "limit": "<2.0"
-      }
-    ]
-  }
-  ```
+```JSON
+{
+  "testTypeId": 1,
+  "typeName": "ICP-Modified",
+  "requiredVolume": 600.00,
+  "description": "Updated description text with differential parameters...",
+  "bgColor": "Red",
+  "iconColor": "Red",
+  "borderColor": "Red",
+  "isActive": 1,
+  "parameters": [
+    {
+      "parameterId": 101,
+      "parameterName": "Li DM",
+      "unit": "ppm",
+      "limit": "<1.5"
+    },
+    {
+      "parameterName": "New Element",
+      "unit": "mg/L",
+      "limit": "<2.0"
+    }
+  ]
+}
+```
 
-- **Success Response** (`HTTP 200 OK`):
+(💡 **JSON Note:** Notice the first parameter includes `"parameterId": 101`, signaling an **UPDATE** to an existing row. The second parameter omits `parameterId`, signaling a brand-new **INSERT** . Any ID not sent back will be **DELETED** .)
 
-```json
+- **Success Response ( `HTTP 200 OK` ):**
+
+```JSON
 {
   "responseCode": 200,
   "message": "Test Type updated successfully",
