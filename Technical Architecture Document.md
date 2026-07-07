@@ -93,9 +93,11 @@ In a pure JDBC environment, to prevent data inconsistency during multi-table ope
 
 ## Sprint 1
 
-### 0. Class diagram for Spring 1
+### 0. Class diagram & ERD for Spring 1
 
 ![1783303993694](image/TechnicalArchitectureDocument/1783303993694.png)
+
+![1783444787592](image/TechnicalArchitectureDocument/1783444787592.png)
 
 ### 1. Architectural Overview
 
