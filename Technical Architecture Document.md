@@ -148,3 +148,77 @@ To illustrate the data flow and execution path across these layers, the handling
 - If any SQL exception occurs, it executes conn.rollback(); otherwise, it executes conn.commit() and closes the connection back to the pool via the finally block.
 
 5. Data Persistence: TestTypeDAO and ParameterDAO execute clean, parameter-bound SQL strings through parent template methods (executeInsertAndReturnKey, executeUpdate), abstracting low-level connectivity from business rules.
+
+## Sprint 2
+
+### 1. Overview & UMLs
+
+The core objective of this iteration (Sprint 2) is to introduce **Stateless Authentication and Role-Based Access Control (RBAC)** to the LIMS system.
+Under the strict architectural constraint of "Pure Servlet + JDBC, zero heavyweight frameworks", we have built a lightweight, secure, and high-performance security gateway defense line. This sprint successfully implements user login, password modification, and privilege-downgrade control for core business APIs.
+
+![1783586639810](image/TechnicalArchitectureDocument/1783586639810.png)
+
+![1783586678761](image/TechnicalArchitectureDocument/1783586678761.png)
+
+### 2. Architecture Evolution
+
+Building upon the C-S-D (Controller-Service-DAO) foundational flow established in Sprint 1, Sprint 2 focuses on introducing a **Global Security Filter Layer** and a **Thread-Level Context Isolation Container**.
+
+- **Inbound Traffic Routing**: All HTTP requests now pass through the `CorsFilter` (Cross-Origin) -> `JwtAuthFilter` (Authentication & Interception) -> `ApiGatewayServlet` (Routing Dispatch).
+- **Context Penetration**: The `UserContext` safely passes the user's identity information down to the Service layer, achieving complete decoupling of business logic from the HTTP protocol.
+
+### 3. Core Component Design
+
+#### 3.1 Authentication & Security Gateway (`JwtAuthFilter`)
+
+Acting as the system's supreme security customs, it implements a four-step defense mechanism:
+
+1. **Static Whitelist**: Bypasses token checks for public routes such as `/api/auth/login`.
+2. **Token Verification**: Intercepts all non-whitelist requests, extracts the `Authorization: Bearer <token>` header, and invokes `TokenUtil` for cryptographic and expiration validation.
+3. **Permission Matrix**: Maintains an in-memory mapping of `URL Prefix -> Allowed Roles`. For instance, access to `/test-types` is strictly restricted to `ADMIN` and `SUPER_ADMIN` roles. Unauthorized access is immediately blocked with a `403 Forbidden` response.
+4. **Context Lifecycle Management**: Upon successful verification, user information is injected into the current thread. **It is mandatory to execute `UserContext.clear()` in the `finally` block to completely eliminate memory leaks and identity cross-contamination caused by Tomcat thread pool reuse.**
+
+#### 3.2 Token Infrastructure (`TokenUtil`)
+
+- **Dependency Selection**: Integrated the ultra-lightweight Auth0 `java-jwt` library.
+- **Cryptographic Algorithm**: Utilizes the symmetric encryption algorithm `HMAC SHA-256`.
+- **Payload Design**: The token encapsulates `userId`, `email`, and `role`, achieving true stateless authentication without the need for backend Session maintenance.
+
+#### 3.3 Thread Context Isolation (`UserContext`)
+
+- Implemented based on `ThreadLocal<Map<String, Object>>`.
+- Provides static methods (e.g., `UserContext.getUserId()`) for downstream Controllers and Services to safely and transparently obtain the current operator's identity. This avoids the code pollution of passing `User` objects through method signatures.
+
+### 4. Data Persistence Layer
+
+#### 4.1 User Entity Mapping (`User` & `UserDAO`)
+
+- **Primary Key Strategy**: Uses `CHAR(36)` to store UUIDs in the database, mapped to `String` in the Java entity.
+- **Pure DAO**: `UserDAO` strictly extends `BaseJdbcDao`. It contains only pure data read/write methods (`selectUserByEmail` and `updatePassword`) and is completely devoid of business logic.
+
+#### 4.2 Underlying ORM Engine Enhancement (`BaseJdbcDao` Patch)
+
+To accommodate the characteristics of the MySQL 8.0+ JDBC driver, the underlying reflection assembly engine received an advanced type-adaptation upgrade:
+
+1. **Time Type Downgrade**: Smartly intercepts `java.time.LocalDateTime` returned by the underlying driver and safely converts it to the `java.util.Date` required by the entity.
+2. **Boolean Compatibility**: Perfectly supports bidirectional mapping from `TINYINT(1)` to Java `Integer` or `Boolean`, significantly enhancing the framework's robustness.
+
+### 5. Core Business Flows
+
+#### 5.1 User Login (`/api/auth/login`)
+
+1. The gateway receives the request and deserializes it into a `LoginReqDTO`.
+2. `UserService` dispatches `UserDAO` to fetch the user record by email.
+3. Executes password comparison (Plaintext comparison for Sprint 2; the architecture has reserved space for future BCrypt integration).
+4. Upon successful comparison, `TokenUtil` is invoked to issue a JWT, which is then encapsulated and returned as an `AuthRespDTO`.
+
+#### 5.2 Modify Password (`/api/auth/password`)
+
+- **Defense-in-Depth Design**: To prevent Horizontal Privilege Escalation (ID tampering), the `ModifyPasswordReqDTO` payload **strictly prohibits the inclusion of the `userId` field**.
+- **Execution Flow**: `UserService` forcefully extracts the absolutely trusted `userId` and `email` (already verified by the gateway) from the `UserContext`. After validating the old password, it physically updates the database with the new password and resets the `must_change_password` flag to 0.
+
+### 6. Architectural Red Lines & Security Disciplines
+
+1. **Strictly Prohibited** to call `close()` on a `Connection` inside `BaseJdbcDao`. The lifecycle of database connections is exclusively managed by `DBUtil` and the transaction boundaries within the Service layer.
+2. **Strictly Prohibited** to pass user identity identifiers within DTOs for non-whitelist APIs. The backend must rely entirely on `UserContext`.
+3. **Strictly Prohibited** to omit the invocation of `UserContext.clear()` at the end of a request lifecycle.
