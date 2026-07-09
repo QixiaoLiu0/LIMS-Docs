@@ -221,3 +221,67 @@
   "data": null
 }
 ```
+
+# Sprint 2
+
+## User Login
+
+- **Description:** Validates user credentials against the database. Upon successful authentication, generates and issues a cryptographically signed JSON Web Token (JWT) encapsulated with the user's identity and system role.
+- **Note (For Backend):** This specific endpoint **MUST** be added to the `WHITELIST` inside `JwtAuthFilter` to bypass authentication checks. Password verification should handle incoming plain text for initial testing, but must pivot to secure hashing (e.g., BCrypt or SHA-256) upon final database integration.
+- **Method:** `POST`
+- **URL:** `/api/auth/login`
+- **Request Body (JSON):**
+
+```JSON
+{
+  "email": "admin@test.com",
+  "password": "secure_password_123"
+}
+```
+
+- **Success Response ( HTTP 200 OK ):**
+
+```JSON
+{
+  "responseCode": 200,
+  "message": "Login successful",
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoiY2hyaXMubGl1QHNhaXQuY2EiLCJyb2xlIjoiQURNSU4ifQ...",
+    "userId": 1,
+    "email": "chris.liu@sait.ca",
+    "role": "SUPER_ADMIN"
+  }
+}
+```
+
+(💡 **Frontend Integration Note:** The client-side application is responsible for intercepting this successful response, extracting the `token` string, and persisting it securely within local storage (`localStorage` or `sessionStorage`). For all subsequent non-whitelist API calls, the frontend must attach this token inside the HTTP header formatted exactly as `Authorization: Bearer \_.)
+
+## Modify Password
+
+- **Description:** Modifies the password of the currently authenticated user.
+- **Architect Note (Security Defense):** This endpoint is highly critical and **MUST NOT** be added to the filter whitelist. To prevent ID-tampering and Horizontal Privilege Escalation vulnerabilities, **the JSON request payload deliberately omits the user's ID** .
+  Once the request successfully passes through the `JwtAuthFilter`, the downstream `Controller` and `Service` layers must fetch the active user's identity directly from the thread-bound context execution pool via `UserContext.getUserId()`.
+- **Method:** **POST**
+- **URL:** `/api/auth/password`
+- **Request Body (JSON):**
+
+```JSON
+{
+  "oldPassword": "secure_password_123",
+  "newPassword": "brand_new_secure_password_456"
+}
+```
+
+- **Success Response ( `HTTP 200 OK` ):**
+
+```JSON
+{
+  "responseCode": 200,
+  "message": "Password updated successfully. Please log in again with your new credentials.",
+  "data": null
+}
+```
+
+## User Logout
+
+**ArchitectNote:** We don't actually need a logout endpoint on the backend. You can just handle it entirely on the frontend by clearing the token from your `localStorage` or `sessionStorage` and redirecting the user back to the login page. That will fully close the loop for logging out.
