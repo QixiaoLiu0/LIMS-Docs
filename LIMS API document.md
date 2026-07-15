@@ -735,7 +735,7 @@ Retrieves the COC list used for the homepage Dashboard display. To ensure above-
   ]
 }
 ```
-## 12. Get COC Details (Full Header and Sample Summary)
+## 12. Get COC Details
 - **Description:** Retrieves the detailed information of a single Chain of Custody (COC) document, which is used to render the COC details page. The response body of this API is divided into two levels:
 
   - Root (COC Level): Returns all fields of the COC table in strict accordance with the ERD. This not only meets the rendering requirements of the current UI header but also provides maximum flexibility for the frontend to expand display fields at any time in the future, avoiding frequent modifications to the backend DTO.
@@ -797,4 +797,60 @@ Retrieves the COC list used for the homepage Dashboard display. To ensure above-
   }
 }
 ```
+
+## 13. Get Sample Details
+- **Description:** Retrieves the full detailed information of a specific Sample record to render the Sample Details page. This endpoint uses a two-tier response structure:
+  - **Sample Level:** Strictly returns the exhaustive list of fields from the `Sample` table. This satisfies the broad data requirements of the top-level detail header and allows for future UI expansions without backend DTO modifications.
+  - **Nested Tests Array:** Returns an array of test tasks assigned to this sample. To minimize network payload, the nested objects only include critical execution data from the Test table combined with the essential fields joined from the `Test_Type` table.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `GET`
+
+- **URL:** `/api/samples/{sampleId}`
+
+- **Request Body:** `None`
+
+- **Success Response (JSON):**
+``` json
+{
+  "responseCode": 200,
+  "message": "Sample details retrieved successfully.",
+  "data": {
+    "sampleId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "cocId": "c8f8b9e2-5a12-4c8d-b9f0-e7a8c9b0d1e2",
+    "sampleTypeId": 1,
+    "sampleClientId": "S_DW_01",
+    "sampledTime": "2024-01-14 10:30:00",
+    "samplingPoint": "Inlet",
+    "matrix": "Drinking Water",
+    "numberOfContainers": 2,
+    "remarks": "",
+    "initialVolume": 1000.00,
+    "remainingVolume": 650.00,
+    "createdAt": "2024-01-14 16:05:00",
+    "isFiltered": 0,
+    "isPreserved": 1,
+    "isFilteredAndPreserved": 0,
+    "status": "Completed",
+    "tests": [
+      {
+        "testId": "a9b8c7d6-e5f4-3c2b-1a09-876543210fed",
+        "testTypeId": 1,
+        "typeName": "ICP",
+        "runNumber": 1,
+        "retestReason": "",
+        "status": "In-Progress",
+        "createdAt": "2024-01-14 16:10:00"
+      },
+      {
+        "testId": "c2d3e4f5-a6b7-8c9d-0e1f-2a3b4c5d6e7f",
+        "testTypeId": 2,
+        "typeName": "Alkalinity",
+        "runNumber": 1,
+        "retestReason": "",
+        "status": "Complete",
+        "createdAt": "2024-01-14 16:12:00"
+      }
+    ]
+  }
+}
 
