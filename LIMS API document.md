@@ -508,8 +508,8 @@ The request payload accepts a single JSON object (not an array). Due to strict E
 
 ## 6. Append Test to Sample (Dynamic Run & Pre-population)
 - **Description:** Assigns a new test task to an existing sample (identified by sampleId in the path). This endpoint handles two heavy backend operations within a single database transaction:
-  - Dynamic Run Calculation: Before inserting into the `Test` table, the backend queries historical records for the same `sampleId` and `testTypeId` to automatically calculate and assign the run_number (e.g., if it's the first time, it assigns 1).
-  - Placeholder Pre-population: Immediately after creating the `Test` record, the backend fetches all parameter blueprints mapped to this `testTypeId` and cascade-inserts placeholder rows (`value = null`) into the Result table.
+  - **Dynamic Run Calculation:** Before inserting into the `Test` table, the backend queries historical records for the same `sampleId` and `testTypeId` to automatically calculate and assign the run_number (e.g., if it's the first time, it assigns 1).
+  - **Placeholder Pre-population:** Immediately after creating the `Test` record, the backend fetches all parameter blueprints mapped to this `testTypeId` and cascade-inserts placeholder rows (`value = null`) into the Result table.
   - **Security & Audit Note:** The `created_by_user_id` required for the `Result` table generation is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
 - **Business Status Rule:** The newly created `Test` record will automatically have its `status` initialized to `'In-Progress'` by the backend.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
@@ -664,3 +664,137 @@ Furthermore, this endpoint serves a dual purpose based on the frontend's interac
   "data": null
 }
 ```
+
+## 11. Get COCs for Dashboard (Dashboard Simplified Card)
+- **Description:**
+Retrieves the COC list used for the homepage Dashboard display. To ensure above-the-fold loading performance, this API uses a dedicated lightweight DTO, returning only the key information required by the UI card (COC metadata, sample summary). It directly calculates the total number of test tasks (`totalTests`) and completed tasks (`completedTests`) under the document through backend **SQL aggregation**. At the current stage, all data is returned in full, without pagination.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `GET`
+- **URL:** `/api/cocs`
+- **Request Body:** `None`
+- **Success Response (JSON):**
+``` json
+{
+  "responseCode": 200,
+  "message": "Dashboard COCs retrieved successfully.",
+  "data": [
+    {
+      "cocId": "c8f8b9e2-5a12-4c8d-b9f0-e7a8c9b0d1e2",
+      "cocNumber": "COC-2024-001",
+      "projectName": "City Water Department",
+      "status": "Completed",
+      "receivedTime": "2024-01-15 09:30:00",
+      "dateRequired": "2024-01-25 17:00:00",
+      "totalTests": 40,
+      "completedTests": 40,
+      "samples": [
+        {
+          "sampleId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+          "sampleClientId": "S_DW_01",
+          "matrix": "Drinking Water"
+        },
+        {
+          "sampleId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+          "sampleClientId": "S_DW_02",
+          "matrix": "Drinking Water"
+        },
+        {
+          "sampleId": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+          "sampleClientId": "S_DW_03",
+          "matrix": "Drinking Water"
+        }
+      ]
+    },
+    {
+      "cocId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "cocNumber": "COC-2024-002",
+      "projectName": "ABC Manufacturing",
+      "status": "In-Progress",
+      "receivedTime": "2024-01-18 14:15:00",
+      "dateRequired": null,
+      "totalTests": 24,
+      "completedTests": 15,
+      "samples": [
+        {
+          "sampleId": "f9e8d7c6-b5a4-3210-fedc-ba0987654321",
+          "sampleClientId": "S_IE_01",
+          "matrix": "Industrial Effluent"
+        },
+        {
+          "sampleId": "d1c2b3a4-0987-6543-21ef-dcba09876543",
+          "sampleClientId": "S_IE_02",
+          "matrix": "Industrial Effluent"
+        },
+        {
+          "sampleId": "5e4d3c2b-1a09-8765-4321-fedcba098765",
+          "sampleClientId": "S_PW_01",
+          "matrix": "Process Water"
+        }
+      ]
+    }
+  ]
+}
+```
+## 12. Get COC Details (Full Header and Sample Summary)
+- **Description:** Retrieves the detailed information of a single Chain of Custody (COC) document, which is used to render the COC details page. The response body of this API is divided into two levels:
+
+  - Root (COC Level): Returns all fields of the COC table in strict accordance with the ERD. This not only meets the rendering requirements of the current UI header but also provides maximum flexibility for the frontend to expand display fields at any time in the future, avoiding frequent modifications to the backend DTO.
+
+  - Nested (Samples Array): Returns the list of samples attached to this document. To ensure network transmission performance, this array only extracts key business and physical fields from the `Sample` table (such as `sampleClientId`, `matrix`, `samplingPoint`, `sampledTime`, `initial/remaining volume`), and calculates the total number of test tasks (totalTests) under each sample through backend SQL aggregation.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `GET`
+- **URL:** `/api/cocs/{cocId}`
+- **Request Body:** `None`
+- **Success Response (JSON):**
+``` json
+{
+  "responseCode": 200,
+  "message": "COC details retrieved successfully.",
+  "data": {
+    "cocId": "c8f8b9e2-5a12-4c8d-b9f0-e7a8c9b0d1e2",
+    "cocNumber": "COC-2024-001",
+    "projectName": "City Water Department",
+    "reportToName1": "John Doe",
+    "reportToEmail1": "john.doe@citywater.ca",
+    "reportToName2": "",
+    "reportToEmail2": "",
+    "dateRequired": "2024-01-22 17:00:00",
+    "isRush": 0,
+    "dateForRush": null,
+    "receivedBy": "Sarah Johnson",
+    "receivedTime": "2024-01-15 09:30:00",
+    "relinquishedBy": "Mike Chen",
+    "relinquishedTime": "2024-01-14 16:00:00",
+    "numberOfContainers": 5,
+    "specialInstructions": "Handle with care. Keep below 4°C.",
+    "createdByUserId": "u1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c",
+    "createdAt": "2024-01-14 16:05:00",
+    "status": "Completed",
+    "samples": [
+      {
+        "sampleId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        "sampleClientId": "S_DW_01",
+        "matrix": "Drinking Water",
+        "samplingPoint": "Inlet",
+        "sampledTime": "2024-01-14 10:30:00",
+        "initialVolume": 1000.00,
+        "remainingVolume": 650.00,
+        "status": "Completed",
+        "totalTests": 3
+      },
+      {
+        "sampleId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+        "sampleClientId": "S_DW_02",
+        "matrix": "Drinking Water",
+        "samplingPoint": "Inlet",
+        "sampledTime": "2024-01-14 11:50:00",
+        "initialVolume": 1000.00,
+        "remainingVolume": 1000.00,
+        "status": "In-Progress",
+        "totalTests": 0
+      }
+    ]
+  }
+}
+```
+
