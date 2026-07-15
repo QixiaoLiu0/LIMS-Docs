@@ -353,24 +353,12 @@
       {
         "sampleTypeId": 1,
         "sampleTypeName": "Water"
-      },
-      {
-        "sampleTypeId": 2,
-        "sampleTypeName": "Soil"
-      },
-      {
-        "sampleTypeId": 3,
-        "sampleTypeName": "Oil"
-      },
-      {
-        "sampleTypeId": 4,
-        "sampleTypeName": "Gas"
       }
     ]
   }
   ```
 ## 3. Delete COC (Cascade Physical Deletion)
-- **Description:** Permanently deletes a Chain of Custody (COC) record based on the provided `cocId` in the path. To prevent foreign key constraint violations, the backend service explicitly executes a reverse-order cascading physical deletion: it first removes all associated `Result` placeholders **(the pre-populated `value=null` rows generated during COC/Sample creation)**, then Test assignments, then `Sample` records, and finally the `COC` root record. This action is irreversible.
+- **Description:** Permanently deletes a Chain of Custody (COC) record based on the provided `cocId` in the path. To prevent foreign key constraint violations, the backend service explicitly executes a reverse-order cascading physical deletion: it first removes all associated `Result` placeholders **(the pre-populated `value=null` rows generated during COC/Sample creation)**, then `Test` assignments, then `Sample` records, and finally the `COC` root record. This action is irreversible.
 - **Note:** Front-end must send an empty JSON object {} as the request body to avoid backend JSON parsing exceptions.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Method:** `POST`
@@ -400,7 +388,7 @@
 3. **Fully populated COC:**
    - **Action:** Populates the `COC`, `Sample`, and `Test` tables. Additionally, it triggers the automatic parameter blueprint fetch and pre-populates the `Result` table with placeholder rows (`value = null`).
    - **JSON Structure:** The payload contains COC fields, sample objects, and populated test assignments (e.g., `"testTypeIds": [1, 2]`).
-- **Security & Audit Note:** The `created_by_user_id` required for creating the `COC` root record (and the subsequent `Result` table placeholders) is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
+- **Security & Audit Note:** The `created_by_user_id` required for creating the `COC` root record (and the subsequent `created_by_user_id` in `Result`) is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
 - **Business Status Rule:** Any `COC`, `Sample`, or `Test` record generated during this transaction will automatically have its `status` initialized to `'In-Progress'` by the backend.
 
 - **Data Contract & Fault Tolerance Rule:**
@@ -471,9 +459,9 @@ Due to strict ERD NOT NULL constraints and to ensure backend DTO fault tolerance
 }
 ```
 ## 5. Append Sample to COC
-- **Description:** Appends a single Sample physical record to an existing Chain of Custody (COC) identified by the cocId in the path. This endpoint is strictly designed for `sample` entity creation only, it inherently prohibits any cascading insertion into the `Test` or `Result` tables. 
+- **Description:** Appends a single Sample physical record to an existing Chain of Custody (COC) identified by the cocId in the path. This endpoint is strictly designed for `sample` entity creation only, it **inherently prohibits** any cascading insertion into the `Test` or `Result` tables. 
 - **Data Contract & Fault Tolerance Rule:**
-The request payload accepts a single JSON object (not an array). Due to strict ERD NOT NULL constraints, the frontend **MUST** pass all fields shown in the example payload below. Unused fields must be submitted as an empty string `""` to ensure DTO fallback safety. Do not pass null.
+The request payload accepts a single JSON object (not an array). Due to strict ERD NOT NULL constraints, the frontend **MUST** pass all fields shown in the example payload below. Unused fields must be submitted as an empty string `""` to ensure DTO fallback safety. Do not pass `null`.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Business Status Rule:** The newly created `Sample` record will automatically have its `status` initialized to `'In-Progress'` by the backend.
 - **Method:** `POST`
@@ -558,7 +546,7 @@ The request payload accepts a single JSON object (not an array). Due to strict E
 }
 ```
 ## 8. Delete Test Task (Cascade Physical Deletion)
-- **Description:** Permanently deletes a single test task (`Tes`t record) identified by the `testId` in the path. To prevent foreign key constraint violations, the backend service must execute a cascading deletion within a single database transaction: first, physically delete all associated rows in the `Result` table (the pre-populated parameter placeholders mapped to this `test_id`), and then delete the target record in the `Test` table.
+- **Description:** Permanently deletes a single test task (`Test` record) identified by the `testId` in the path. To prevent foreign key constraint violations, the backend service must execute a cascading deletion within a single database transaction: first, physically delete all associated rows in the `Result` table (the pre-populated parameter placeholders mapped to this `test_id`), and then delete the target record in the `Test` table.
 - **Note:** This action is irreversible. The frontend must send an empty JSON object {} as the request body to satisfy backend JSON parsing requirements.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Method:** `POST`
@@ -577,7 +565,7 @@ The request payload accepts a single JSON object (not an array). Due to strict E
 ```
 
 ## 9. Get Test Results (Placeholder Retrieval)
-- **Description:** Retrieves all result rows (both populated values and empty placeholders) for a specific test task, identified by the testId in the path. Because placeholders are automatically generated during test assignment, the backend simply executes a JOIN query between the Result table and the Parameter blueprint table. This provides the frontend with both the data entry fields (resultId, value, qualifier) and the necessary display metadata (parameterName, unit, limit).
+- **Description:** Retrieves all result rows (both populated values and empty placeholders) for a specific test task, identified by the `testId` in the path. Because placeholders are automatically generated during test assignment, the backend simply executes a JOIN query between the `Result` table and the `Parameter` blueprint table. This provides the frontend with both the data entry fields (resultId, value, qualifier) and the necessary display metadata (parameterName, unit, limit).
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Method:** `GET`
 - **URL:** `/api/tests/{testId}/results`
@@ -740,7 +728,7 @@ Retrieves the COC list used for the homepage Dashboard display. To ensure above-
 
   - Root (COC Level): Returns all fields of the COC table in strict accordance with the ERD. This not only meets the rendering requirements of the current UI header but also provides maximum flexibility for the frontend to expand display fields at any time in the future, avoiding frequent modifications to the backend DTO.
 
-  - Nested (Samples Array): Returns the list of samples attached to this document. To ensure network transmission performance, this array only extracts key business and physical fields from the `Sample` table (such as `sampleClientId`, `matrix`, `samplingPoint`, `sampledTime`, `initial/remaining volume`), and calculates the total number of test tasks (totalTests) under each sample through backend SQL aggregation.
+  - Nested (Samples Array): Returns the list of samples attached to this document. To ensure network transmission performance, this array only extracts key business and physical fields from the `Sample` table (such as `sampleClientId`, `matrix`, `samplingPoint`, `sampledTime`, `initial/remaining volume`), and calculates the total number of test tasks (`totalTests`) under each sample through backend SQL aggregation.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Method:** `GET`
 - **URL:** `/api/cocs/{cocId}`
@@ -847,7 +835,7 @@ Retrieves the COC list used for the homepage Dashboard display. To ensure above-
         "typeName": "Alkalinity",
         "runNumber": 1,
         "retestReason": "",
-        "status": "Complete",
+        "status": "Completed",
         "createdAt": "2024-01-14 16:12:00"
       }
     ]
