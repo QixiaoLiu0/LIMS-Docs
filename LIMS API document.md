@@ -22,6 +22,7 @@
 ### 1. Create Test Type
 
 - **Description:** Saves a new test type form along with its parameters. The backend must open a database transaction to insert into both `Test_Type` and `Parameter` tables.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). (`ADMIN`, `SUPER_ADMIN`).
 - **Method:** `POST`
 - **URL:** `/api/test-types`
 - **Request Body (JSON):**
@@ -66,6 +67,7 @@
 
 - **Description:** Fetches all existing test types ALONG WITH their associated parameters to display as detailed cards on the UI homepage.
 - **Architect Note (For Backend):** ⚠️ **CRITICAL:** Do NOT use the N+1 query approach (executing a separate SQL query inside a `for` loop for each test type). You MUST execute a single `LEFT JOIN` SQL query to fetch data from both tables simultaneously. Then, in your Java Servlet/DAO, iterate through the flat JDBC `ResultSet` and group (fold) the duplicated `Test_Type` rows into a single `TestTypeDTO` that contains a `List<ParameterDTO>`.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). (`ADMIN`, `SUPER_ADMIN`).
 - **Method:** `GET`
 - **URL:** `/api/test-types`
 - **Request Body:** Non
@@ -134,6 +136,7 @@
 - **Architect Note** (For Frontend): Why fetch again instead of using the existing data from the List view?
 - 1. **Data Freshness:** Ensures the user is editing the most up-to-date record, preventing data conflicts if another admin modified it recently.
 - 2. **Deep Linking / Page Refresh:** Allows the Edit page to be accessed directly via URL or refreshed without crashing, as it does not rely on the parent list component's memory state.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). (`ADMIN`, `SUPER_ADMIN`).
 - **Method:** `GET`
 - **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/1`)_
 - **Request Body:** None
@@ -173,13 +176,14 @@
 ### 4. Update Test Type
 
 - **Description:** Updates an existing test type and performs a precise, differential update (Diffing) on its parameter list to preserve historical data integrity (Foreign Key constraints).
-- **Architect Note (For Backend & Frontend):** \* **Frontend:** To update an existing parameter, you **MUST** include its original `parameterId`. To add a brand-new parameter, omit the `parameterId` (or pass `null`). If you remove a parameter from this array, the backend will treat it as a deletion request.
+- **Note (For Backend & Frontend):** \* **Frontend:** To update an existing parameter, you **MUST** include its original `parameterId`. To add a brand-new parameter, omit the `parameterId` (or pass `null`). If you remove a parameter from this array, the backend will treat it as a deletion request.
   - **Backend:** Use the "Diffing Algorithm" inside a single JDBC transaction:
     1. `UPDATE` the main `Test_Type` row using the `{id}` from the URL.
     2. Loop through the incoming `parameters` JSON array.
     3. If `parameterId` exists **$\rightarrow$** `UPDATE` existing parameter.
     4. If `parameterId` is null/missing **$\rightarrow$** `INSERT` new parameter.
     5. If an existing DB parameter is missing from the JSON **$\rightarrow$** `DELETE` it (catch FK exceptions gracefully).
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). (`ADMIN`, `SUPER_ADMIN`).
 - **Method:** **POST**
 - **URL:** `/api/test-types/{id}` _(e.g., `/api/test-types/1`)_
 - **Request Body (JSON):**
@@ -261,6 +265,7 @@
 - **Description:** Modifies the password of the currently authenticated user.
 - **Architect Note (Security Defense):** This endpoint is highly critical and **MUST NOT** be added to the filter whitelist. To prevent ID-tampering and Horizontal Privilege Escalation vulnerabilities, **the JSON request payload deliberately omits the user's ID** .
   Once the request successfully passes through the `JwtAuthFilter`, the downstream `Controller` and `Service` layers must fetch the active user's identity directly from the thread-bound context execution pool via `UserContext.getUserId()`.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header).(All authenticated roles are permitted.)
 - **Method:** **POST**
 - **URL:** `/api/auth/password`
 - **Request Body (JSON):**
@@ -285,3 +290,368 @@
 ## User Logout
 
 **ArchitectNote:** We don't actually need a logout endpoint on the backend. You can just handle it entirely on the frontend by clearing the token from your `localStorage` or `sessionStorage` and redirecting the user back to the login page. That will fully close the loop for logging out.
+
+# Sprint 3
+
+## 1. Get Active Test Types (Lookup)
+
+- **Description:** Retrieves a lightweight dictionary list of all currently active test types. This endpoint is designed specifically to populate frontend tag selectors during COC creation or sample test assignment. It performs a single-table query on `Test_Type` (`WHERE is_active = 1`) and strictly avoids joining underlying parameters to prevent over-fetching.
+- **Authentication:** Required (Valid JWT in `Authorization Bearer <token>`). All authenticated roles are permitted.
+- **Method:** `GET`
+- **URL:** `/api/lookup/test-types`
+- **Request Body (JSON):** _(None required for this GET request)_
+- **Success Response:**
+ ```JSON
+  {
+    "responseCode": 200,
+    "message": "Success",
+    "data": [
+      {
+        "testTypeId": 1,
+        "typeName": "ICP",
+        "description": "Inductively Coupled Plasma",
+        "requiredVolume": 300.00,
+        "bgColor": "#F0F0F0",
+        "iconColor": "#333333",
+        "borderColor": "#CCCCCC"
+      },
+      {
+        "testTypeId": 2,
+        "typeName": "IC",
+        "description": "Ion Chromatography",
+        "requiredVolume": 250.00,
+        "bgColor": "#E8F4F8",
+        "iconColor": "#005577",
+        "borderColor": "#BBDDFF"
+      },
+      {
+        "testTypeId": 3,
+        "typeName": "Alkalinity",
+        "description": "Total Alkalinity Test",
+        "requiredVolume": 100.00,
+        "bgColor": "#E6F4EA",
+        "iconColor": "#117733",
+        "borderColor": "#AADDCC"
+      }
+    ]
+  }
+  ```
+
+## 2. Get Sample Types (Lookup)
+
+- **Description:** Retrieves a dictionary list of all available sample categories (e.g., Water, Soil, Gas, Oil). This endpoint queries the Sample_Type table and is used to populate the sample type dropdown menus during COC and sample creation.
+* **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+* **Method:** `GET`
+* **URL:** `/api/lookup/sample-types`
+* **Request Body (JSON):** _(None required for this GET request)_
+* **Success Response:**
+ ```JSON
+  {
+    "responseCode": 200,
+    "message": "Success",
+    "data": [
+      {
+        "sampleTypeId": 1,
+        "sampleTypeName": "Water"
+      },
+      {
+        "sampleTypeId": 2,
+        "sampleTypeName": "Soil"
+      },
+      {
+        "sampleTypeId": 3,
+        "sampleTypeName": "Oil"
+      },
+      {
+        "sampleTypeId": 4,
+        "sampleTypeName": "Gas"
+      }
+    ]
+  }
+  ```
+## 3. Delete COC (Cascade Physical Deletion)
+- **Description:** Permanently deletes a Chain of Custody (COC) record based on the provided `cocId` in the path. To prevent foreign key constraint violations, the backend service explicitly executes a reverse-order cascading physical deletion: it first removes all associated `Result` placeholders **(the pre-populated `value=null` rows generated during COC/Sample creation)**, then Test assignments, then `Sample` records, and finally the `COC` root record. This action is irreversible.
+- **Note:** Front-end must send an empty JSON object {} as the request body to avoid backend JSON parsing exceptions.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+- **URL:** `/api/cocs/{cocId}/delete`
+- **Request Body (JSON):** 
+```JSON
+  {}
+```
+- **Success Response:**
+ ```JSON
+  {
+    "responseCode": 200,
+    "message": "COC and all related tree data permanently deleted.",
+    "data": null
+  }
+  ```
+## 4. Create COC (Hierarchical Aggregate Creation)
+- **Description:** Creates a single Chain of Custody (COC) record in one atomic database transaction. To support flexible laboratory workflows, this endpoint accepts varying depths of nested arrays, resulting in three distinct creation states:
+1. **Empty COC:**
+   - **Action:** Populates only the `COC` root table.
+   - **JSON Structure:** The payload contains COC-level fields, and the samples array is explicitly empty (i.e., `"samples": []`).
+
+2. **Semi-empty COC:**
+   - **Action:** Populates the `COC` and `Sample` tables.
+   - **JSON Structure:** The payload contains COC fields and one or more sample objects, but the test assignments are explicitly empty (i.e., `"testTypeIds": []`).
+
+3. **Fully populated COC:**
+   - **Action:** Populates the `COC`, `Sample`, and `Test` tables. Additionally, it triggers the automatic parameter blueprint fetch and pre-populates the `Result` table with placeholder rows (`value = null`).
+   - **JSON Structure:** The payload contains COC fields, sample objects, and populated test assignments (e.g., `"testTypeIds": [1, 2]`).
+- **Security & Audit Note:** The `created_by_user_id` required for creating the `COC` root record (and the subsequent `Result` table placeholders) is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
+
+- **Data Contract & Fault Tolerance Rule:**
+Due to strict ERD NOT NULL constraints and to ensure backend DTO fault tolerance, the frontend MUST pass all fields shown in the example payload below. If a field is currently unused or empty in the UI (e.g., `reportToName`, `reportToEmail`), it must be passed as an empty string `""`. Do not omit the key and do not pass `null`.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+- **URL:** `/api/cocs`
+- **Request Body (JSON):**
+``` JSON
+{
+  "cocNumber": "COC-2026-001",
+  "projectName": "Calgary Water Quality Test",
+  "reportToName1": "",
+  "reportToEmail1": "",
+  "reportToName2": "",
+  "reportToEmail2": "",
+  "dateRequired": "2026-07-20 17:00:00",
+  "isRush": 0,
+  "dateForRush": "",
+  "receivedBy": "",
+  "receivedTime": "",
+  "relinquishedBy": "John",
+  "relinquishedTime": "2026-07-14 11:00:00",
+  "numberOfContainers": 10,
+  "specialInstructions": "Keep refrigerated below 4°C.",
+  "samples": [
+    {
+      "sampleTypeId": 1,
+      "sampleClientId": "S_DW_01",
+      "sampledTime": "2026-07-14 10:30:00",
+      "samplingPoint": "Inlet Pipe A",
+      "matrix": "Drinking Water",
+      "numberOfContainers": 2,
+      "remarks": "",
+      "initialVolume": 500.00,
+      "remainingVolume": 500.00,
+      "isFiltered": 0,
+      "isPreserved": 1,
+      "isFilteredAndPreserved": 0,
+      "testTypeIds": [1, 2] 
+    },
+    {
+      "sampleTypeId": 1,
+      "sampleClientId": "S_DW_02",
+      "sampledTime": "2026-07-14 11:00:00",
+      "samplingPoint": "Outlet Pipe B",
+      "matrix": "Drinking Water",
+      "numberOfContainers": 1,
+      "remarks": "Slightly cloudy",
+      "initialVolume": 250.00,
+      "remainingVolume": 250.00,
+      "isFiltered": 1,
+      "isPreserved": 0,
+      "isFilteredAndPreserved": 0,
+      "testTypeIds": [] 
+    }
+  ]
+}
+```
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "COC created successfully.",
+  "data": {
+    "cocId": "c8f8b9e2-5a12-4c8d-b9f0-e7a8c9b0d1e2"
+  }
+}
+```
+## 5. Append Sample to COC
+- **Description:** Appends a single Sample physical record to an existing Chain of Custody (COC) identified by the cocId in the path. This endpoint is strictly designed for sample entity creation only—it inherently prohibits any cascading insertion into the Test or Result tables. Data Contract & Fault Tolerance Rule:
+The request payload accepts a single JSON object (not an array). Due to strict ERD NOT NULL constraints, the frontend MUST pass all fields shown in the example payload below. Unused fields must be submitted as an empty string "" to ensure DTO fallback safety. Do not pass null.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+- **URL:** `/api/cocs/{cocId}/samples`
+- **Request Body (JSON):**
+``` json
+{
+  "sampleTypeId": 1,
+  "sampleClientId": "S_DW_03",
+  "sampledTime": "2026-07-14 12:00:00",
+  "samplingPoint": "Inlet Pipe C",
+  "matrix": "Drinking Water",
+  "numberOfContainers": 1,
+  "remarks": "",
+  "initialVolume": 500.00,
+  "remainingVolume": 500.00,
+  "isFiltered": 0,
+  "isPreserved": 0,
+  "isFilteredAndPreserved": 0
+}
+```
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "Sample added successfully.",
+  "data": {
+    "sampleId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  }
+}
+```
+
+## 6. Append Test to Sample (Dynamic Run & Pre-population)
+- **Description:** Assigns a new test task to an existing sample (identified by sampleId in the path). This endpoint handles two heavy backend operations within a single database transaction:
+  - Dynamic Run Calculation: Before inserting into the `Test` table, the backend queries historical records for the same `sampleId` and `testTypeId` to automatically calculate and assign the run_number (e.g., if it's the first time, it assigns 1).
+  - Placeholder Pre-population: Immediately after creating the `Test` record, the backend fetches all parameter blueprints mapped to this `testTypeId` and cascade-inserts placeholder rows (`value = null`) into the Result table.
+  - **Security & Audit Note:** The `created_by_user_id` required for the `Result` table generation is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
+  
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+- **URL:** `/api/samples/{sampleId}/tests`
+- **Request Body (JSON):**
+``` json
+{
+  "testTypeId": 1
+}
+```
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "Test assigned successfully with Result table placeholders generated.",
+  "data": {
+    "testId": "a9b8c7d6-e5f4-3c2b-1a09-876543210fed",
+    "runNumber": 1
+  }
+}
+```
+
+## 7. Delete Sample (Cascade Physical Deletion)
+- **Description:** Permanently deletes a Sample physical record and its entire downstream hierarchy based on the provided sampleId in the path. To prevent foreign key constraint violations, the backend service must execute a strict reverse-order cascading deletion within a single database transaction:
+  - Identifies all `test_id`s associated with the `sampleId`.
+  - Deletes all related data and placeholders from the `Result` table.
+  - Deletes the assigned tasks from the `Test` table.
+  - Finally, deletes the root `Sample` record itself.
+  
+  **Note:** This action is irreversible. The frontend must send an empty JSON object `{}` as the request body to satisfy `POST` request JSON parsing requirements.
+
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+- **URL:** `/api/samples/{sampleId}/delete`
+- **Request Body (JSON):**
+``` json
+  {}
+```
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "Sample and all associated downstream tests/results permanently deleted.",
+  "data": null
+}
+```
+## 8. Delete Test Task (Cascade Physical Deletion)
+- **Description:** Permanently deletes a single test task (`Tes`t record) identified by the `testId` in the path. To prevent foreign key constraint violations, the backend service must execute a cascading deletion within a single database transaction: first, physically delete all associated rows in the `Result` table (the pre-populated parameter placeholders mapped to this `test_id`), and then delete the target record in the `Test` table.
+- **Note:** This action is irreversible. The frontend must send an empty JSON object {} as the request body to satisfy backend JSON parsing requirements.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+- **URL:** `/api/tests/{testId}/delete`
+- **Request Body (JSON):**
+``` json
+  {}
+```
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "Test task and its associated result placeholders permanently deleted.",
+  "data": null
+}
+```
+
+## 9. Get Test Results (Placeholder Retrieval)
+- **Description:** Retrieves all result rows (both populated values and empty placeholders) for a specific test task, identified by the testId in the path. Because placeholders are automatically generated during test assignment, the backend simply executes a JOIN query between the Result table and the Parameter blueprint table. This provides the frontend with both the data entry fields (resultId, value, qualifier) and the necessary display metadata (parameterName, unit, limit).
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `GET`
+- **URL:** `/api/tests/{testId}/results`
+- **Request Body (JSON):** _(None required for this GET request)_
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "Success",
+  "data": [
+    {
+      "resultId": "e1f2g3h4-5678-90ab-cdef-1234567890ab",
+      "parameterId": 101,
+      "parameterName": "Calcium",
+      "unit": "mg/L",
+      "limit": "50",
+      "value": null,
+      "qualifier": ""
+    },
+    {
+      "resultId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "parameterId": 102,
+      "parameterName": "Magnesium",
+      "unit": "mg/L",
+      "limit": "30",
+      "value": null,
+      "qualifier": ""
+    },
+    {
+      "resultId": "f9e8d7c6-b5a4-3210-fedc-ba0987654321",
+      "parameterId": 103,
+      "parameterName": "pH",
+      "unit": "pH units",
+      "limit": "6.5 - 8.5",
+      "value": "7.2",
+      "qualifier": ""
+    }
+  ]
+}
+```
+## 10. Batch Save Test Results (Update Placeholders)
+- **Description:** Saves or updates the laboratory results for a specific test task. Because result placeholders are already pre-populated during the test assignment phase, this endpoint performs strictly lightweight `UPDATE` operations (e.g., `UPDATE Result SET value = ?, qualifier = ?, updated_by_user_id = ? WHERE result_id = ?`).
+- **Security & Audit Note:** The `updated_by_user_id` is securely extracted from the backend's ThreadLocal JWT context and injected into the SQL statement. The frontend must not pass user IDs in the payload.
+- **Data Contract & Fault Tolerance Rule:**
+The frontend only needs to send an array of the results that are being modified. The qualifier field (e.g., `<`, `>`) is strictly NOT NULL in the database; if there is no qualifier, pass an empty string `""`. If a user clears a previously entered value, also pass `""` for the value field.
+- **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Method:** `POST`
+
+- **URL:** `/api/tests/{testId}/results/save`
+
+- **Request Body (JSON):**
+``` json 
+{
+  "results": [
+    {
+      "resultId": "e1f2g3h4-5678-90ab-cdef-1234567890ab",
+      "value": "45.2",
+      "qualifier": ""
+    },
+    {
+      "resultId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "value": "0.05",
+      "qualifier": "<"
+    },
+    {
+      "resultId": "f9e8d7c6-b5a4-3210-fedc-ba0987654321",
+      "value": "7.2",
+      "qualifier": ""
+    }
+  ]
+}
+```
+- **Success Response:**
+``` json
+{
+  "responseCode": 200,
+  "message": "Test results saved successfully.",
+  "data": null
+}
+```
