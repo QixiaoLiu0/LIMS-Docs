@@ -401,6 +401,7 @@
    - **Action:** Populates the `COC`, `Sample`, and `Test` tables. Additionally, it triggers the automatic parameter blueprint fetch and pre-populates the `Result` table with placeholder rows (`value = null`).
    - **JSON Structure:** The payload contains COC fields, sample objects, and populated test assignments (e.g., `"testTypeIds": [1, 2]`).
 - **Security & Audit Note:** The `created_by_user_id` required for creating the `COC` root record (and the subsequent `Result` table placeholders) is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
+- **Business Status Rule:** Any `COC`, `Sample`, or `Test` record generated during this transaction will automatically have its `status` initialized to `'In-Progress'` by the backend.
 
 - **Data Contract & Fault Tolerance Rule:**
 Due to strict ERD NOT NULL constraints and to ensure backend DTO fault tolerance, the frontend MUST pass all fields shown in the example payload below. If a field is currently unused or empty in the UI (e.g., `reportToName`, `reportToEmail`), it must be passed as an empty string `""`. Do not omit the key and do not pass `null`.
@@ -470,9 +471,11 @@ Due to strict ERD NOT NULL constraints and to ensure backend DTO fault tolerance
 }
 ```
 ## 5. Append Sample to COC
-- **Description:** Appends a single Sample physical record to an existing Chain of Custody (COC) identified by the cocId in the path. This endpoint is strictly designed for sample entity creation only—it inherently prohibits any cascading insertion into the Test or Result tables. Data Contract & Fault Tolerance Rule:
-The request payload accepts a single JSON object (not an array). Due to strict ERD NOT NULL constraints, the frontend MUST pass all fields shown in the example payload below. Unused fields must be submitted as an empty string "" to ensure DTO fallback safety. Do not pass null.
+- **Description:** Appends a single Sample physical record to an existing Chain of Custody (COC) identified by the cocId in the path. This endpoint is strictly designed for `sample` entity creation only, it inherently prohibits any cascading insertion into the `Test` or `Result` tables. 
+- **Data Contract & Fault Tolerance Rule:**
+The request payload accepts a single JSON object (not an array). Due to strict ERD NOT NULL constraints, the frontend **MUST** pass all fields shown in the example payload below. Unused fields must be submitted as an empty string `""` to ensure DTO fallback safety. Do not pass null.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
+- **Business Status Rule:** The newly created `Sample` record will automatically have its `status` initialized to `'In-Progress'` by the backend.
 - **Method:** `POST`
 - **URL:** `/api/cocs/{cocId}/samples`
 - **Request Body (JSON):**
@@ -508,7 +511,7 @@ The request payload accepts a single JSON object (not an array). Due to strict E
   - Dynamic Run Calculation: Before inserting into the `Test` table, the backend queries historical records for the same `sampleId` and `testTypeId` to automatically calculate and assign the run_number (e.g., if it's the first time, it assigns 1).
   - Placeholder Pre-population: Immediately after creating the `Test` record, the backend fetches all parameter blueprints mapped to this `testTypeId` and cascade-inserts placeholder rows (`value = null`) into the Result table.
   - **Security & Audit Note:** The `created_by_user_id` required for the `Result` table generation is securely extracted from the backend's ThreadLocal JWT context. The frontend must not pass any user ID in the payload.
-  
+- **Business Status Rule:** The newly created `Test` record will automatically have its `status` initialized to `'In-Progress'` by the backend.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Method:** `POST`
 - **URL:** `/api/samples/{sampleId}/tests`
@@ -616,10 +619,15 @@ The request payload accepts a single JSON object (not an array). Due to strict E
 }
 ```
 ## 10. Batch Save Test Results (Update Placeholders)
-- **Description:** Saves or updates the laboratory results for a specific test task. Because result placeholders are already pre-populated during the test assignment phase, this endpoint performs strictly lightweight `UPDATE` operations (e.g., `UPDATE Result SET value = ?, qualifier = ?, updated_by_user_id = ? WHERE result_id = ?`).
+- **Description:** Saves or submits the laboratory results for a specific test task. Because result placeholders are already pre-populated, this endpoint performs strictly lightweight `UPDATE` operations to avoid `INSERT` overhead and row-lock contention.
+Furthermore, this endpoint serves a dual purpose based on the frontend's interaction, controlled by the `isComplete` boolean flag:
+  - (**Save as Draft** - `isComplete: false`): Performs only the lightweight `UPDATE` on the `Result` placeholders. It does not alter any business status.
+  - (**Submit** - `isComplete: true`): Updates the results AND triggers a hierarchical status rollup within the same database transaction. It updates the current `Test` status to `'Completed'`, then checks if all sibling tests under the parent `Sample` are completed. If yes, it bubbles up to update the `Sample` status to `'Completed'`, and repeats the check for the grandparent `COC` level.
+
 - **Security & Audit Note:** The `updated_by_user_id` is securely extracted from the backend's ThreadLocal JWT context and injected into the SQL statement. The frontend must not pass user IDs in the payload.
 - **Data Contract & Fault Tolerance Rule:**
-The frontend only needs to send an array of the results that are being modified. The qualifier field (e.g., `<`, `>`) is strictly NOT NULL in the database; if there is no qualifier, pass an empty string `""`. If a user clears a previously entered value, also pass `""` for the value field.
+  - The frontend only needs to send an array of the results that are being modified. The qualifier field (e.g., `<`, `>`) is strictly NOT NULL in the database; if there is no qualifier, pass an empty string `""`. If a user clears a previously entered value, also pass `""` for the value field.
+  - When the user clicks the **`"Save as Draft"`** button, pass `"isComplete": false`; when the user clicks the **`"Submit"`** button, pass `"isComplete": true`.
 - **Authentication:** Required (Valid JWT in `Authorization: Bearer <token>` header). All authenticated roles are permitted.
 - **Method:** `POST`
 
@@ -628,6 +636,7 @@ The frontend only needs to send an array of the results that are being modified.
 - **Request Body (JSON):**
 ``` json 
 {
+  "isComplete": true,
   "results": [
     {
       "resultId": "e1f2g3h4-5678-90ab-cdef-1234567890ab",
@@ -651,7 +660,7 @@ The frontend only needs to send an array of the results that are being modified.
 ``` json
 {
   "responseCode": 200,
-  "message": "Test results saved successfully.",
+  "message": "Test results processed successfully.",
   "data": null
 }
 ```
