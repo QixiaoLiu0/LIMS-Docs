@@ -1,8 +1,6 @@
-i
-
 # LIMS Technical Architecture Document (TAD)
 
-## Global Foundations
+## Global Foundations[v]()
 
 **This section defines the core architectural principles for the LIMS system. All development must strictly adhere to the following boundaries and contracts.**
 
@@ -11,22 +9,23 @@ i
 The system adopts a strict decoupled frontend-backend architecture. Component responsibilities are clearly defined, and overstepping boundaries is strictly prohibited:
 
 - **Core Tech Stack:**
+
   - **Frontend:** Next.js (Reagct), Tailwind CSS, MUI
   - **Backend:** Java 8, Tomcat 9.0.x (Servlet 4.0), Pure JDBC (No ORM), Gson 2.9.0
   - **Database:** MySQL 8.0.x
   - **Connection Pool:** HikariCP 4.0.x (Selected for Java 8 compatibility)
   - **Package Manager:** Maven 3.9.x
-
 - **Frontend Layer (Next.js / React):**
+
   - **Sole Responsibility:** UI rendering, routing, user input validation, and state management.
   - **Strict Rule:** The frontend must never construct SQL or contain core business logic. All data must be fetched via HTTP APIs.
-
 - **Backend Layer (Java Servlet API):**
+
   - **Sole Responsibility:** Acts as a stateless API gateway and business logic executor. It receives requests, validates permissions, enforces business rules, and coordinates database interactions.
   - **Architectural Decision (Zero Framework):** The backend is built **strictly without the Spring ecosystem** (No Spring Boot, or Spring Data/Hibernate).
   - **Rationale:** To facilitate deep foundational learning for junior developers, avoiding heavy enterprise frameworks prevents reliance on black-box annotations (e.g., `@Transactional`, `@RestController`). Using pure **Servlets** and **JDBC** forces the team to thoroughly understand the raw HTTP request lifecycle, manual database connection pooling, and explicit transaction boundaries.
-
 - **Persistence Layer (MySQL):**
+
   - **Sole Responsibility:** Ensures data persistence and relational integrity (e.g., foreign key constraints).
   - **Strict Rule:** The database acts as storage. Complex state logic (e.g., "Status A cannot change to Status B") must be handled in Java. The use of complex **triggers** or **stored procedures** is prohibited.
 
@@ -51,13 +50,13 @@ To maintain clean and consistent data, all database designs and operations must 
 - **ERD Baseline:** All table creations and modifications must strictly align with the approved ERD. Unapproved column additions are forbidden.
 - **Naming Conventions:** All database tables and columns must use **snake_case** (e.g., `test_type_id`, `required_volume`).
 - **Primary Key Strategy:** Transactional tables (e.g., COC, Sample, Test, Result) use `CHAR(36)` for UUIDs. Configuration dictionary tables (e.g., Test_Type, Parameter) use auto-incrementing `INT` primary keys.
-- **Enum Mapping:** Status values are stored as `VARCHAR` in MySQL and mapped to strongly typed `Enum` classes in Java.
 
 ### 4. Cross-Cutting Concerns & Protocol
 
 To eliminate frontend-backend integration friction, CORS, exceptions, and API responses must be handled via unified mechanisms:
 
 - **Global Response Wrapper:**
+
   - Every HTTP API response (whether successful or an exception) must be wrapped in the `RespResult<T>` structure.
 
   ```
@@ -67,12 +66,12 @@ To eliminate frontend-backend integration friction, CORS, exceptions, and API re
     "data": { ... }               // Payload of generic type T (can be null on error)
   }
   ```
-
 - **CORS & Core Filter Mechanism:**
+
   - To support direct client-side fetching from Next.js, the backend must implement a global `CorsFilter`.
   - **Filter Order Rule:** `CorsFilter` MUST be placed **first** in the filter chain (before `JwtAuthFilter`). This ensures browser `OPTIONS` preflight requests are permitted immediately; otherwise, cross-origin requests will fail entirely.
-
 - **Exception & Logging Handling:**
+
   - Raw `SQLException` stack traces must never be exposed to the frontend.
   - Exceptions must be caught(try-catch) in the `Service` or `Controller` layer, and converted into a `responseCode: 500` `RespResult` to return to the client.
 
@@ -222,3 +221,63 @@ To accommodate the characteristics of the MySQL 8.0+ JDBC driver, the underlying
 1. **Strictly Prohibited** to call `close()` on a `Connection` inside `BaseJdbcDao`. The lifecycle of database connections is exclusively managed by `DBUtil` and the transaction boundaries within the Service layer.
 2. **Strictly Prohibited** to pass user identity identifiers within DTOs for non-whitelist APIs. The backend must rely entirely on `UserContext`.
 3. **Strictly Prohibited** to omit the invocation of `UserContext.clear()` at the end of a request lifecycle.
+
+## Sprint 3: Core Business Flows and Complex Aggregate Architecture
+
+### 1. Overview
+Sprint 3 represents the most critical business flow of the LIMS system, covering the full lifecycle management from Chain of Custody (COC) creation, Sample receiving, and Test task assignment, to Result data entry.
+In this iteration, the system faced significant challenges, including **multi-table cascading operations, strict foreign key constraints, high-frequency batch I/O, and complex hierarchical status transitions**. While strictly adhering to the architectural red line of "Pure Servlet + JDBC, zero heavyweight frameworks," we deeply refactored the underlying data access base class (`BaseJdbcDao`) and introduced advanced architectural design patterns such as in-memory aggregation and status rollup, ensuring both high performance and strong data consistency.
+![1784298240758](image/TechnicalArchitectureDocument/1784298240758.png)
+
+### 2. Core Architectural Upgrades
+
+#### 2.1 High-Performance Batch Processing Engine
+To address the high-frequency write scenarios in API 6 (Placeholder Generation) and API 10 (Batch Save Results), we introduced the `executeBatchUpdate` method into `BaseJdbcDao`.
+*   **Technical Details:** We discarded inefficient `for`-loop single `INSERT/UPDATE` statements and fully adopted native JDBC `PreparedStatement.addBatch()` and `executeBatch()`. By packaging massive SQL statements and submitting them to MySQL via a single network I/O, we drastically reduced database connection overhead and row-lock contention time.
+
+#### 2.2 Scalar Query Engine
+For aggregate function queries like `COUNT()` and `MAX()`, we designed a dedicated generic method: `executeQueryForScalar`.
+*   **Pain Point Resolved:** Completely circumvented the reflection instantiation crashes caused by basic wrapper classes (e.g., `Integer`, `Long`) lacking no-argument constructors.
+*   **Downcasting Fault Tolerance:** Addressed the underlying pitfall where the MySQL JDBC driver defaults `COUNT()` returns to `java.lang.Long`. We introduced an intelligent downcasting logic based on the `Number` superclass, ensuring the DAO layer's single-line calls remain minimalist and elegant.
+
+#### 2.3 Ultimate Defensive Reflection
+To equip our lightweight ORM engine with enterprise-grade fault tolerance, we executed an ultimate refactoring of the reflection mapping logic in `BaseJdbcDao`:
+1.  **Collection Boundary Defense:** Explicitly intercepts and skips properties of type `List` / `Collection`. This enforces the rule that "multi-dimensional" aggregate relationships must be assembled in-memory at the Service layer, clearly defining the physical mapping boundaries of the DAO layer.
+2.  **Bidirectional Time Adaptation:** Perfectly accommodates seamless conversions between the underlying driver's `java.time.LocalDateTime` / `java.sql.Timestamp` and the entity class's `java.util.Date`.
+3.  **Numeric and Boolean Degradation:** Implemented intelligent and safe degradation from `BIGINT` to `Integer`, and `TINYINT(1)` to `Boolean` / `Integer`.
+
+#### 2.4 Global Serialization Adapter
+Registered a global bidirectional `TypeAdapter` for `java.time.LocalDateTime` within the `ApiGatewayServlet`'s Gson instance.
+*   **Technical Details:** Uniformly serializes backend `LocalDateTime` objects into frontend-friendly `"yyyy-MM-dd HH:mm:ss"` formatted strings. It also incorporates fault tolerance for empty strings `""` during deserialization, thoroughly guaranteeing Type Security at the DTO layer.
+
+### 3. Key Business Scenarios Implementation
+
+#### 3.1 Hierarchical Aggregate Creation
+In API 4 (Create COC), we implemented a cascading creation of tree-structured data up to 4 levels deep.
+*   **Primary Key Strategy:** Fully adopted `UUID.randomUUID().toString()` to pre-generate primary keys in Java memory. This eliminates the dependency on database auto-increment IDs, making batch insertions and parent-child table associations highly efficient.
+*   **Placeholder Pre-population:** When assigning Test tasks, the system automatically fetches the Parameter blueprint and cascade-inserts Result placeholders with `value = null`. This allows subsequent result entries (API 10) to be downgraded to lightweight `UPDATE` operations, avoiding `INSERT` table-lock risks under high concurrency.
+
+#### 3.2 Status Rollup Mechanism
+In API 10 (Batch Save Results), we implemented a bottom-up status-driven engine.
+*   **Technical Details:** When a lab technician submits results (`isComplete: true`), the system first marks the current Test as `Completed`. It then triggers a rollup validation: using scalar queries (`COUNT`), it checks if any incomplete Tests remain under the same Sample. If none, the Sample is marked as `Completed`, and the check bubbles up to the COC root node. Pure string hardcoding (`"Completed"`) is used throughout, eliminating serialization and coupling issues associated with Enums.
+
+#### 3.3 Cascade Physical Deletion
+For the deletion operations in APIs 3, 7, and 8, strict adherence to relational database Foreign Key Constraints is maintained.
+*   **Execution Strategy:** Within a single transaction, a **strict reverse-order deletion strategy** is employed (Result -> Test -> Sample -> COC).
+*   **Empty Payload Tolerance:** The Controller layer directly ignores the parsing of the DELETE request body, perfectly circumventing Gson parsing exceptions caused by the frontend sending empty objects `{}`.
+
+#### 3.4 Anti-N+1 In-Memory Aggregation
+In API 11 (Dashboard COCs), to ensure ultimate above-the-fold loading performance on the homepage, traditional N+1 loop queries were completely abandoned.
+*   **Technical Details:**
+    1.  Utilized SQL `LEFT JOIN` and `SUM(CASE WHEN...)` to directly compute the total and completed Test counts at the database layer.
+    2.  Extracted all COC IDs and used an `IN (...)` clause to fetch all associated Samples in a single query.
+    3.  Utilized `HashMap` in the Service layer for In-Memory Assembly. This strictly limits database I/O calls to exactly 2, achieving highly efficient assembly with an O(N) time complexity.
+
+### 4. Security & Audit Trail
+Fully integrated the `UserContext` thread context isolation container established in Sprint 2.
+*   **Transparent Auditing:** When executing any creation (`INSERT`) or update (`UPDATE`) operations, the Service layer forcefully extracts the current operator's ID via `UserContext.getUserId()`.
+*   **Strict Differentiation:** During data initialization, only `created_by_user_id` is written. During result entry (API 10), `updated_by_user_id` and `updated_at` are precisely updated. This achieves 100% tamper-proof audit traceability for lab data, without requiring (or allowing) the frontend to pass any user identifiers in the payload.
+
+### 5. Architectural Red Lines Compliance
+1.  **Absolute Transaction Boundaries:** All write operations initiate transactions via `conn.setAutoCommit(false)` in the Service layer and strictly execute `DBUtil.closeConnection()` within the `finally` block, achieving zero connection leaks.
+2.  **Unified Exception Funneling:** The Controller layer fully wraps executions in `try-catch` blocks, converting all underlying `SQLException`s or business exceptions into standard `RespResult.error(500, msg)`. This completely blocks the leakage of sensitive stack trace information to the frontend.
