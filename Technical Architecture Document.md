@@ -227,7 +227,8 @@ To accommodate the characteristics of the MySQL 8.0+ JDBC driver, the underlying
 ### 1. Overview
 Sprint 3 represents the most critical business flow of the LIMS system, covering the full lifecycle management from Chain of Custody (COC) creation, Sample receiving, and Test task assignment, to Result data entry.
 In this iteration, the system faced significant challenges, including **multi-table cascading operations, strict foreign key constraints, high-frequency batch I/O, and complex hierarchical status transitions**. While strictly adhering to the architectural red line of "Pure Servlet + JDBC, zero heavyweight frameworks," we deeply refactored the underlying data access base class (`BaseJdbcDao`) and introduced advanced architectural design patterns such as in-memory aggregation and status rollup, ensuring both high performance and strong data consistency.
-![1784298240758](image/TechnicalArchitectureDocument/1784298240758.png)
+![1784405279574](image/TechnicalArchitectureDocument/1784405279574.png)
+
 
 ### 2. Core Architectural Upgrades
 
