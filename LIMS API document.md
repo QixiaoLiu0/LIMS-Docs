@@ -176,7 +176,8 @@
 ### 4. Update Test Type
 
 - **Description:** Updates an existing test type and performs a precise, differential update (Diffing) on its parameter list to preserve historical data integrity (Foreign Key constraints).
-- **Note (For Backend & Frontend):** \* **Frontend:** To update an existing parameter, you **MUST** include its original `parameterId`. To add a brand-new parameter, omit the `parameterId` (or pass `null`). If you remove a parameter from this array, the backend will treat it as a deletion request.
+- **Note (For Backend & Frontend):** 
+  - **Frontend:** To update an existing parameter, you **MUST** include its original `parameterId`. To add a brand-new parameter, omit the `parameterId` (or pass `null`). If you remove a parameter from this array, the backend will treat it as a deletion request.
   - **Backend:** Use the "Diffing Algorithm" inside a single JDBC transaction:
     1. `UPDATE` the main `Test_Type` row using the `{id}` from the URL.
     2. Loop through the incoming `parameters` JSON array.
@@ -841,4 +842,83 @@ Retrieves the COC list used for the homepage Dashboard display. To ensure above-
     ]
   }
 }
+```
+# Sprint 4
+## 1. Get All Users
+- **Description:** Retrieves a complete list of all registered users in the system.
+
+- **Note (For Backend):** This endpoint is strictly restricted to the SUPER_ADMIN role via the JwtAuthFilter permission matrix. The backend MUST map the raw User entity to a UserRespDTO before returning the response to ensure sensitive data (specifically pwd_hash) is stripped and never serialized to the client.
+- **Method:** `GET`
+- **URL:** `/api/user`
+- **Success Response ( HTTP 200 OK ):**
+```JSON
+{
+  "responseCode": 200,
+  "message": "Success",
+  "data": [
+    {
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "email": "superadmin@sait.ca",
+      "firstName": "Super",
+      "lastName": "Admin",
+      "role": "SUPER_ADMIN",
+      "mustChangePassword": 0,
+      "createdAt": "2026-07-08 23:54:36"
+    },
+    {
+      "userId": "00000000-0000-0000-0000-000000000002",
+      "email": "admin@sait.ca",
+      "firstName": "Lab",
+      "lastName": "Manager",
+      "role": "ADMIN",
+      "mustChangePassword": 0,
+      "createdAt": "2026-07-08 23:54:36"
+    }
+  ]
+}
+```
+
+## 2. New A User
+- **Description:** Provisions a new user account within the system. Automatically assigns a newly generated UUID and links the creation record to the active administrator.
+
+- **Note (For Backend):** This endpoint is strictly restricted to the SUPER_ADMIN role. The created_by_user_id must be extracted dynamically from the UserContext thread local. The must_change_password flag must be hardcoded to 1 (true) at the entity level before database insertion.
+- **Method:** `POST`
+- **URL:** `/api/user`
+- **Request Body (JSON):**
+```json
+{
+  "email": "new.tech@sait.ca",
+  "password": "SecurePassword123!",
+  "firstName": "John",
+  "lastName": "Doe",
+  "role": "STAFF"
+}
+```
+- **Success Response ( HTTP 200 OK ):**
+```json
+{
+  "responseCode": 200,
+  "message": "Success",
+  "data": null
+}
+```
+## 3. Update User's Role
+- **Description:** Modifies the system role privileges assigned to a specific user.
+- **Note (For Backend): This endpoint is strictly restricted to the SUPER_ADMIN role. It utilizes RESTful path variables ({userId}) to identify the target resource, isolating the payload to only contain the mutated state (role). Valid roles include "SUPER_ADMIN", "ADMIN", and "STAFF".
+- **Method:** `POST`
+- **URL:** `/api/user/{userId}/role`
+- **Request Body (JSON):**
+```json
+{
+  "role": "ADMIN"
+}
+```
+- **Success Response ( HTTP 200 OK ):**
+```json
+{
+  "responseCode": 200,
+  "message": "Success",
+  "data": null
+}
+```
 
